@@ -17,6 +17,22 @@ class MonopolyBoardView @JvmOverloads constructor(
     private var players: List<Player> = emptyList()
     private var centerMessage: String = "Selamat Datang di Monopoli!"
 
+    // Map to track visual positions for animation
+    private val visualPositions = mutableMapOf<String, Float>()
+    
+    // Floating Emojis
+    private data class FloatingEmoji(val emoji: String, val playerId: String, var x: Float, var y: Float, var alpha: Int, val startTime: Long)
+    private val activeEmojis = mutableListOf<FloatingEmoji>()
+
+    fun showEmoji(playerId: String, emoji: String) {
+        val player = players.find { it.id == playerId } ?: return
+        val pos = visualPositions[playerId] ?: player.position.toFloat()
+        val rect = getSquareRect(pos, width.toFloat(), width.toFloat() / 11f)
+        
+        activeEmojis.add(FloatingEmoji(emoji, playerId, rect.centerX(), rect.centerY(), 255, System.currentTimeMillis()))
+        invalidate()
+    }
+
     fun setCenterMessage(message: String) {
         this.centerMessage = message
         invalidate()
@@ -61,9 +77,33 @@ class MonopolyBoardView @JvmOverloads constructor(
         invalidate()
     }
 
-    fun setPlayers(players: List<Player>) {
-        this.players = players
+    fun setPlayers(newPlayers: List<Player>) {
+        if (this.players.isEmpty()) {
+            newPlayers.forEach { visualPositions[it.id] = it.position.toFloat() }
+        } else {
+            newPlayers.forEach { player ->
+                val lastPos = visualPositions[player.id] ?: 0f
+                if (Math.abs(lastPos - player.position.toFloat()) > 0.1f) {
+                    animatePlayerMovement(player.id, lastPos, player.position.toFloat())
+                }
+            }
+        }
+        this.players = newPlayers
         invalidate()
+    }
+
+    private fun animatePlayerMovement(playerId: String, start: Float, end: Float) {
+        var targetEnd = end
+        if (targetEnd < start) targetEnd += 40f 
+
+        val animator = android.animation.ValueAnimator.ofFloat(start, targetEnd)
+        animator.duration = 1000
+        animator.interpolator = android.view.animation.DecelerateInterpolator()
+        animator.addUpdateListener { animation ->
+            visualPositions[playerId] = (animation.animatedValue as Float) % 40f
+            invalidate()
+        }
+        animator.start()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -83,7 +123,7 @@ class MonopolyBoardView @JvmOverloads constructor(
 
         // Draw Squares
         for (i in 0 until 40) {
-            val rect = getSquareRect(i, size, squareSize)
+            val rect = getSquareRect(i.toFloat(), size, squareSize)
             drawSquare(canvas, rect, squares[i], i)
         }
 
@@ -113,23 +153,43 @@ class MonopolyBoardView @JvmOverloads constructor(
             typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
         }
         canvas.drawText("MONOPOLI", centerRect.centerX(), centerRect.top + squareSize * 1.2f, logoPaint)
+
+        // Draw and Update Emojis
+        val iterator = activeEmojis.iterator()
+        val emojiPaint = Paint(labelPaint).apply { textSize = 60f }
+        while (iterator.hasNext()) {
+            val emoji = iterator.next()
+            val elapsed = System.currentTimeMillis() - emoji.startTime
+            if (elapsed > 2000) {
+                iterator.remove()
+                continue
+            }
+            
+            emoji.y -= 2f // Float up
+            emoji.alpha = (255 * (1f - elapsed / 2000f)).toInt()
+            emojiPaint.alpha = emoji.alpha
+            
+            canvas.drawText(emoji.emoji, emoji.x, emoji.y, emojiPaint)
+        }
+        if (activeEmojis.isNotEmpty()) invalidate()
     }
 
-    private fun getSquareRect(index: Int, totalSize: Float, squareSize: Float): RectF {
+    private fun getSquareRect(index: Float, totalSize: Float, squareSize: Float): RectF {
+        val i = index % 40
         return when {
-            index in 0 until 10 -> { // Bottom side (Right to Left)
-                RectF(totalSize - (index + 1) * squareSize, totalSize - squareSize, totalSize - index * squareSize, totalSize)
+            i < 10 -> { // Bottom side (Right to Left)
+                RectF(totalSize - (i + 1) * squareSize, totalSize - squareSize, totalSize - i * squareSize, totalSize)
             }
-            index in 10 until 20 -> { // Left side (Bottom to Top)
-                val subIndex = index - 10
+            i < 20 -> { // Left side (Bottom to Top)
+                val subIndex = i - 10
                 RectF(0f, totalSize - (subIndex + 1) * squareSize, squareSize, totalSize - subIndex * squareSize)
             }
-            index in 20 until 30 -> { // Top side (Left to Right)
-                val subIndex = index - 20
+            i < 30 -> { // Top side (Left to Right)
+                val subIndex = i - 20
                 RectF(subIndex * squareSize, 0f, (subIndex + 1) * squareSize, squareSize)
             }
             else -> { // Right side (Top to Bottom)
-                val subIndex = index - 30
+                val subIndex = i - 30
                 RectF(totalSize - squareSize, subIndex * squareSize, totalSize, (subIndex + 1) * squareSize)
             }
         }
@@ -176,6 +236,9 @@ class MonopolyBoardView @JvmOverloads constructor(
                 else -> rect.centerY() + 35f
             }
             canvas.drawText("$${square.price}", rect.centerX(), priceY, pricePaint)
+
+            // Draw Houses/Hotels
+            drawHouses(canvas, rect, square, index, barSize)
         }
 
         // Small icon or text for special squares
@@ -204,15 +267,50 @@ class MonopolyBoardView @JvmOverloads constructor(
         }
     }
 
+    private fun drawHouses(canvas: Canvas, rect: RectF, square: Square, index: Int, barSize: Float) {
+        if (square.houses == 0) return
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val padding = 4f
+        val buildingSize = (barSize - padding * 2)
+
+        if (square.houses == 5) { // Hotel
+            paint.color = Color.RED
+            val hotelRect = when {
+                index in 0..9 -> RectF(rect.centerX() - buildingSize / 2, rect.top + padding, rect.centerX() + buildingSize / 2, rect.top + barSize - padding)
+                index in 10..19 -> RectF(rect.right - barSize + padding, rect.centerY() - buildingSize / 2, rect.right - padding, rect.centerY() + buildingSize / 2)
+                index in 20..29 -> RectF(rect.centerX() - buildingSize / 2, rect.bottom - barSize + padding, rect.centerX() + buildingSize / 2, rect.bottom - padding)
+                else -> RectF(rect.left + padding, rect.centerY() - buildingSize / 2, rect.left + barSize - padding, rect.centerY() + buildingSize / 2)
+            }
+            canvas.drawRect(hotelRect, paint)
+            canvas.drawRect(hotelRect, borderPaint)
+        } else { // Houses
+            paint.color = Color.parseColor("#4CAF50") // Material Green
+            val houseWidth = (rect.width() - padding * 2) / 4f
+            for (i in 0 until square.houses) {
+                val houseRect = when {
+                    index in 0..9 -> RectF(rect.left + padding + i * houseWidth, rect.top + padding, rect.left + (i + 1) * houseWidth - padding, rect.top + barSize - padding)
+                    index in 10..19 -> RectF(rect.right - barSize + padding, rect.top + padding + i * houseWidth, rect.right - padding, rect.top + (i + 1) * houseWidth - padding)
+                    index in 20..29 -> RectF(rect.left + padding + i * houseWidth, rect.bottom - barSize + padding, rect.left + (i + 1) * houseWidth - padding, rect.bottom - padding)
+                    else -> RectF(rect.left + padding, rect.top + padding + i * houseWidth, rect.left + barSize - padding, rect.top + (i + 1) * houseWidth - padding)
+                }
+                canvas.drawRect(houseRect, paint)
+                canvas.drawRect(houseRect, borderPaint)
+            }
+        }
+    }
+
     private fun drawPlayers(canvas: Canvas, totalSize: Float, squareSize: Float) {
-        val playerPositions = mutableMapOf<Int, Int>() // Position -> Count at that position
+        val playerPositions = mutableMapOf<Int, Int>() 
 
         for (player in players) {
-            val pos = player.position
-            val count = playerPositions.getOrDefault(pos, 0)
-            playerPositions[pos] = count + 1
+            val visualPos = visualPositions[player.id] ?: player.position.toFloat()
+            val gridPos = Math.round(visualPos) % 40
+            
+            val count = playerPositions.getOrDefault(gridPos, 0)
+            playerPositions[gridPos] = count + 1
 
-            val rect = getSquareRect(pos, totalSize, squareSize)
+            val rect = getSquareRect(visualPos, totalSize, squareSize)
             
             // Calculate player offset within square to avoid overlap
             val offsetX = (count % 2) * (squareSize / 3f) - (squareSize / 6f)

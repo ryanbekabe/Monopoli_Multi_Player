@@ -13,9 +13,11 @@ data class Square(
     // Property specific fields (optional/nullable)
     val price: Int = 0,
     val rent: Int = 0,
+    val rentLevels: List<Int> = emptyList(), // Rent with 1, 2, 3, 4 houses and 1 hotel
+    val housePrice: Int = 0,
     val colorGroup: String? = null,
     var ownerId: String? = null,
-    var houses: Int = 0,
+    var houses: Int = 0, // 5 houses = 1 hotel
     var isMortgaged: Boolean = false,
     // Special square fields
     val taxAmount: Int = 0

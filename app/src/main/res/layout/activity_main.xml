@@ -62,6 +62,26 @@
         app:layout_constraintEnd_toEndOf="parent"/>
 
     <LinearLayout
+        android:id="@+id/emojiBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        app:layout_constraintBottom_toTopOf="@id/connectionLayout"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:background="#44000000"
+        android:padding="4dp">
+        
+        <TextView android:id="@+id/emo1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="😂" android:textSize="30sp" android:padding="8dp"/>
+        <TextView android:id="@+id/emo2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🤣" android:textSize="30sp" android:padding="8dp"/>
+        <TextView android:id="@+id/emo3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🤑" android:textSize="30sp" android:padding="8dp"/>
+        <TextView android:id="@+id/emo4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="😠" android:textSize="30sp" android:padding="8dp"/>
+        <TextView android:id="@+id/emo5" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="😭" android:textSize="30sp" android:padding="8dp"/>
+
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/connectionLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

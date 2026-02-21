@@ -9,7 +9,9 @@ enum class MessageType {
     BUY_PROPERTY,   // Client buys property
     END_TURN,       // Client ends turn
     CHAT,           // Chat message
-    START_GAME      // Host starts game
+    START_GAME,     // Host starts game
+    AUCTION,        // Start/Update auction
+    EMOJI           // Floating emoji reaction
 }
 
 data class NetworkMessage(
